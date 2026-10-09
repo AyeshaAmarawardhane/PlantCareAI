@@ -19,6 +19,8 @@ struct MyGardenView: View {
     private var plants: FetchedResults<Plant>
 
     @State private var showingAddPlant = false
+    @State private var errorMessage: String?
+    @State private var showingError = false
 
     private let primaryGreen = Color(
         red: 0.13,
@@ -42,7 +44,7 @@ struct MyGardenView: View {
                 } else {
                     ForEach(plants, id: \.objectID) { plant in
 
-                        VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 12) {
 
                             Text(plant.name ?? "Unnamed Plant")
                                 .font(.headline)
@@ -65,6 +67,40 @@ struct MyGardenView: View {
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                             }
+
+                            if let lastWatered = plant.lastWatered {
+                                Label(
+                                    "Last watered: \(lastWatered.formatted(date: .abbreviated, time: .omitted))",
+                                    systemImage: "calendar"
+                                )
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            } else {
+                                Text("Not watered yet")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Button {
+                                markAsWatered(plant)
+                            } label: {
+                                Label(
+                                    isWateredToday(plant)
+                                    ? "Watered Today"
+                                    : "Mark as Watered",
+                                    systemImage: isWateredToday(plant)
+                                    ? "checkmark.circle.fill"
+                                    : "drop.fill"
+                                )
+                                .font(.subheadline.bold())
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(primaryGreen)
+                            .disabled(isWateredToday(plant))
+                            .padding(.top, 5)
                         }
                         .padding(.vertical, 8)
                     }
@@ -87,19 +123,104 @@ struct MyGardenView: View {
             .sheet(isPresented: $showingAddPlant) {
                 AddPlantView()
             }
+            .alert("Unable to Save", isPresented: $showingError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "An unexpected error occurred.")
+            }
         }
         .tint(primaryGreen)
     }
 
+    // MARK: - Check Watering Status
+
+    private func isWateredToday(_ plant: Plant) -> Bool {
+        guard let lastWatered = plant.lastWatered else {
+            return false
+        }
+
+        return Calendar.current.isDateInToday(lastWatered)
+    }
+
+    // MARK: - Mark Plant as Watered
+
+    private func markAsWatered(_ plant: Plant) {
+
+        guard !isWateredToday(plant) else {
+            return
+        }
+
+        let now = Date()
+
+        if plant.id == nil {
+            plant.id = UUID()
+        }
+
+        let careRecord = CareRecord(context: viewContext)
+
+        careRecord.id = UUID()
+        careRecord.plantID = plant.id
+        careRecord.plantName = plant.name ?? "Unnamed Plant"
+        careRecord.careType = "Watering"
+        careRecord.date = now
+
+        plant.lastWatered = now
+
+        do {
+            try viewContext.save()
+
+            // Schedule next watering reminder
+            if let plantID = plant.id {
+                NotificationManager.shared.scheduleWateringReminder(
+                    plantID: plantID,
+                    plantName: plant.name ?? "Unnamed Plant",
+                    frequency: Int(plant.wateringFrequency),
+                    lastWatered: now
+                )
+            }
+
+            print("Plant watered and next reminder requested.")
+
+        } catch {
+            viewContext.rollback()
+
+            errorMessage = error.localizedDescription
+            showingError = true
+
+            print("Watering save error: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Delete Plants
+
     private func deletePlants(at offsets: IndexSet) {
-        for index in offsets {
-            viewContext.delete(plants[index])
+
+        let plantsToDelete = offsets.map { plants[$0] }
+
+        let plantIDs = plantsToDelete.compactMap { $0.id }
+
+        for plant in plantsToDelete {
+            viewContext.delete(plant)
         }
 
         do {
             try viewContext.save()
+
+            // Cancel reminders after successful deletion
+            for plantID in plantIDs {
+                NotificationManager.shared.cancelReminder(
+                    plantID: plantID
+                )
+            }
+
+            print("Plants deleted and reminders cancelled.")
+
         } catch {
             viewContext.rollback()
+
+            errorMessage = error.localizedDescription
+            showingError = true
+
             print("Delete error: \(error.localizedDescription)")
         }
     }
@@ -119,6 +240,15 @@ struct AddPlantView: View {
     @State private var species = ""
     @State private var notes = ""
     @State private var wateringFrequency = 3
+
+    @State private var errorMessage: String?
+    @State private var showingError = false
+
+    private let primaryGreen = Color(
+        red: 0.13,
+        green: 0.48,
+        blue: 0.30
+    )
 
     var body: some View {
         NavigationStack {
@@ -158,8 +288,16 @@ struct AddPlantView: View {
                     )
                 }
             }
+            .alert("Unable to Save Plant", isPresented: $showingError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "An unexpected error occurred.")
+            }
         }
+        .tint(primaryGreen)
     }
+
+    // MARK: - Save Plant
 
     private func savePlant() {
 
@@ -177,13 +315,35 @@ struct AddPlantView: View {
 
         do {
             try viewContext.save()
+
+            // Schedule first watering reminder
+            if let plantID = plant.id,
+               let dateAdded = plant.dateAdded {
+
+                NotificationManager.shared.scheduleWateringReminder(
+                    plantID: plantID,
+                    plantName: plant.name ?? "Unnamed Plant",
+                    frequency: Int(plant.wateringFrequency),
+                    lastWatered: dateAdded
+                )
+            }
+
+            print("Plant saved and first reminder requested.")
+
             dismiss()
+
         } catch {
             viewContext.rollback()
+
+            errorMessage = error.localizedDescription
+            showingError = true
+
             print("Save error: \(error.localizedDescription)")
         }
     }
 }
+
+// MARK: - Preview
 
 #Preview {
     MyGardenView()

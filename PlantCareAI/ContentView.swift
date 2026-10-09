@@ -6,7 +6,10 @@ struct ContentView: View {
 
     @FetchRequest(
         sortDescriptors: [
-            NSSortDescriptor(keyPath: \Plant.dateAdded, ascending: false)
+            NSSortDescriptor(
+                keyPath: \Plant.dateAdded,
+                ascending: false
+            )
         ],
         animation: .default
     )
@@ -21,55 +24,47 @@ struct ContentView: View {
     var body: some View {
         TabView {
 
-            // MARK: Home
+            // MARK: - Home
             homeScreen
                 .tabItem {
                     Label("Home", systemImage: "house.fill")
                 }
 
-            // MARK: My Garden
+            // MARK: - My Garden
             MyGardenView()
                 .tabItem {
                     Label("My Garden", systemImage: "leaf.fill")
                 }
 
-            // MARK: Scan
+            // MARK: - Scan
             PlantScannerView()
-            
-            .tabItem {
-                Label("Scan", systemImage: "camera.fill")
-            }
+                .tabItem {
+                    Label("Scan", systemImage: "camera.fill")
+                }
 
-            // MARK: History
-            placeholderScreen(
-                title: "Care History",
-                icon: "calendar",
-                message: "Track your plant care activities."
-            )
-            .tabItem {
-                Label("History", systemImage: "clock.fill")
-            }
+            // MARK: - History
+            CareHistoryView()
+                .tabItem {
+                    Label("History", systemImage: "clock.fill")
+                }
 
-            // MARK: Settings
-            placeholderScreen(
-                title: "Settings",
-                icon: "gearshape.fill",
-                message: "Customize your PlantCare AI experience."
-            )
-            .tabItem {
-                Label("Settings", systemImage: "gearshape.fill")
-            }
+            // MARK: - Settings
+            SettingsView()
+                .tabItem {
+                    Label("Settings", systemImage: "gearshape.fill")
+                }
         }
         .tint(primaryGreen)
     }
 
     // MARK: - Home Screen
+
     private var homeScreen: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
 
-                    // Welcome Header
+                    // MARK: Welcome Header
                     HStack {
                         VStack(alignment: .leading, spacing: 6) {
 
@@ -93,7 +88,7 @@ struct ContentView: View {
                             .foregroundStyle(primaryGreen)
                     }
 
-                    // AI Scanner Card
+                    // MARK: AI Scanner Card
                     VStack(alignment: .leading, spacing: 15) {
 
                         Image(systemName: "camera.viewfinder")
@@ -102,8 +97,10 @@ struct ContentView: View {
                         Text("Discover Your Plants")
                             .font(.title2.bold())
 
-                        Text("Take a photo of a plant and let AI help you identify it.")
-                            .font(.subheadline)
+                        Text(
+                            "Take a photo of a plant and let AI help you identify it."
+                        )
+                        .font(.subheadline)
 
                         Text("Tap the Scan tab to get started")
                             .font(.caption.bold())
@@ -112,21 +109,30 @@ struct ContentView: View {
                             .clipShape(Capsule())
                     }
                     .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(
+                        maxWidth: .infinity,
+                        alignment: .leading
+                    )
                     .padding(24)
                     .background(
                         LinearGradient(
                             colors: [
                                 primaryGreen,
-                                Color(red: 0.29, green: 0.69, blue: 0.48)
+                                Color(
+                                    red: 0.29,
+                                    green: 0.69,
+                                    blue: 0.48
+                                )
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
-                    .clipShape(RoundedRectangle(cornerRadius: 24))
+                    .clipShape(
+                        RoundedRectangle(cornerRadius: 24)
+                    )
 
-                    // Garden Overview
+                    // MARK: Garden Overview
                     Text("Your Garden Overview")
                         .font(.title2.bold())
 
@@ -145,42 +151,146 @@ struct ContentView: View {
                         )
                     }
 
-                    // Today's Care
+                    // MARK: Today's Care
                     Text("Today's Care")
                         .font(.title2.bold())
 
-                    VStack(spacing: 12) {
+                    if plants.isEmpty {
 
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 42))
-                            .foregroundStyle(primaryGreen)
-
-                        Text(
-                            plants.isEmpty
-                            ? "All caught up!"
-                            : "Keep Your Garden Healthy!"
+                        careMessage(
+                            icon: "leaf.circle.fill",
+                            title: "Your Garden is Empty",
+                            message: "Add your first plant to start tracking its care."
                         )
-                        .font(.headline)
 
-                        Text(
-                            plants.isEmpty
-                            ? "Add your first plant to start tracking its care."
-                            : "Visit My Garden to manage your plants and watering schedules."
-                        )
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
+                    } else {
+
+                        let duePlants = plants.filter {
+                            isWateringDue($0)
+                        }
+
+                        if duePlants.isEmpty {
+
+                            careMessage(
+                                icon: "checkmark.circle.fill",
+                                title: "All Caught Up!",
+                                message: "Your plants are up to date with their watering schedules."
+                            )
+
+                        } else {
+
+                            VStack(spacing: 12) {
+
+                                ForEach(duePlants, id: \.objectID) { plant in
+
+                                    HStack(spacing: 14) {
+
+                                        Image(systemName: "drop.fill")
+                                            .font(.title2)
+                                            .foregroundStyle(primaryGreen)
+                                            .frame(width: 35)
+
+                                        VStack(
+                                            alignment: .leading,
+                                            spacing: 6
+                                        ) {
+
+                                            Text(
+                                                plant.name ?? "Unnamed Plant"
+                                            )
+                                            .font(.headline)
+
+                                            Text("Watering Needed")
+                                                .font(.subheadline)
+                                                .foregroundStyle(.orange)
+
+                                            Text(
+                                                wateringStatus(for: plant)
+                                            )
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                        }
+
+                                        Spacer()
+
+                                        Image(
+                                            systemName: "exclamationmark.circle.fill"
+                                        )
+                                        .font(.title2)
+                                        .foregroundStyle(.orange)
+                                    }
+                                    .padding(18)
+                                    .frame(
+                                        maxWidth: .infinity,
+                                        alignment: .leading
+                                    )
+                                    .background(
+                                        Color(.secondarySystemGroupedBackground)
+                                    )
+                                    .clipShape(
+                                        RoundedRectangle(cornerRadius: 18)
+                                    )
+                                }
+                            }
+                        }
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(28)
-                    .background(
-                        Color(.secondarySystemGroupedBackground)
-                    )
-                    .clipShape(
-                        RoundedRectangle(cornerRadius: 20)
-                    )
+
+                    // MARK: Upcoming Watering
+                    if !plants.isEmpty {
+
+                        Text("Upcoming Watering")
+                            .font(.title2.bold())
+
+                        VStack(spacing: 12) {
+
+                            ForEach(
+                                plants.filter {
+                                    !isWateringDue($0)
+                                },
+                                id: \.objectID
+                            ) { plant in
+
+                                HStack(spacing: 14) {
+
+                                    Image(systemName: "calendar")
+                                        .font(.title2)
+                                        .foregroundStyle(primaryGreen)
+
+                                    VStack(
+                                        alignment: .leading,
+                                        spacing: 5
+                                    ) {
+
+                                        Text(
+                                            plant.name ?? "Unnamed Plant"
+                                        )
+                                        .font(.headline)
+
+                                        Text(
+                                            wateringStatus(for: plant)
+                                        )
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    }
+
+                                    Spacer()
+
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(primaryGreen)
+                                }
+                                .padding()
+                                .background(
+                                    Color(.secondarySystemGroupedBackground)
+                                )
+                                .clipShape(
+                                    RoundedRectangle(cornerRadius: 18)
+                                )
+                            }
+                        }
+                    }
                 }
                 .padding()
+                .padding(.bottom, 24)
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Home")
@@ -188,16 +298,92 @@ struct ContentView: View {
     }
 
     // MARK: - Watering Statistics
+
     private var wateredTodayCount: Int {
+
         plants.filter { plant in
+
             guard let date = plant.lastWatered else {
                 return false
             }
+
             return Calendar.current.isDateInToday(date)
+
         }.count
     }
 
+    // MARK: - Watering Due Calculation
+
+    private func isWateringDue(_ plant: Plant) -> Bool {
+
+        guard let lastWatered = plant.lastWatered else {
+            return true
+        }
+
+        let frequency = max(
+            Int(plant.wateringFrequency),
+            1
+        )
+
+        guard let nextWateringDate = Calendar.current.date(
+            byAdding: .day,
+            value: frequency,
+            to: lastWatered
+        ) else {
+            return false
+        }
+
+        return Calendar.current.startOfDay(
+            for: nextWateringDate
+        ) <= Calendar.current.startOfDay(for: Date())
+    }
+
+    // MARK: - Watering Status
+
+    private func wateringStatus(for plant: Plant) -> String {
+
+        guard let lastWatered = plant.lastWatered else {
+            return "Not watered yet"
+        }
+
+        let frequency = max(
+            Int(plant.wateringFrequency),
+            1
+        )
+
+        guard let nextWateringDate = Calendar.current.date(
+            byAdding: .day,
+            value: frequency,
+            to: lastWatered
+        ) else {
+            return "Schedule unavailable"
+        }
+
+        let today = Calendar.current.startOfDay(for: Date())
+
+        let nextDay = Calendar.current.startOfDay(
+            for: nextWateringDate
+        )
+
+        let daysDifference = Calendar.current.dateComponents(
+            [.day],
+            from: today,
+            to: nextDay
+        ).day ?? 0
+
+        if daysDifference < 0 {
+            return "Overdue by \(abs(daysDifference)) day(s)"
+        } else if daysDifference == 0 {
+            return "Water today"
+        } else if daysDifference == 1 {
+            return "Water tomorrow"
+        } else {
+            return "Next watering in \(daysDifference) days"
+        }
+    }
+
     // MARK: - Statistics Card
+
     private func statCard(
         title: String,
         value: String,
@@ -217,7 +403,10 @@ struct ContentView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(
+            maxWidth: .infinity,
+            alignment: .leading
+        )
         .padding()
         .background(
             Color(.secondarySystemGroupedBackground)
@@ -227,35 +416,36 @@ struct ContentView: View {
         )
     }
 
-    // MARK: - Placeholder Screens
-    private func placeholderScreen(
-        title: String,
+    // MARK: - Care Message Card
+
+    private func careMessage(
         icon: String,
+        title: String,
         message: String
     ) -> some View {
 
-        NavigationStack {
-            VStack(spacing: 18) {
+        VStack(spacing: 12) {
 
-                Image(systemName: icon)
-                    .font(.system(size: 65))
-                    .foregroundStyle(primaryGreen)
+            Image(systemName: icon)
+                .font(.system(size: 42))
+                .foregroundStyle(primaryGreen)
 
-                Text(title)
-                    .font(.title.bold())
+            Text(title)
+                .font(.headline)
 
-                Text(message)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(
-                Color(.systemGroupedBackground)
-            )
-            .navigationTitle(title)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
+        .frame(maxWidth: .infinity)
+        .padding(28)
+        .background(
+            Color(.secondarySystemGroupedBackground)
+        )
+        .clipShape(
+            RoundedRectangle(cornerRadius: 20)
+        )
     }
 }
 
